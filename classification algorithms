@@ -1,0 +1,187 @@
+MNIST
+Getting the data
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+%matplotlib inline
+mnist = pd.read_csv("digit-recognizer/train.csv")
+# mnist.columns
+Index(['label', 'pixel0', 'pixel1', 'pixel2', 'pixel3', 'pixel4', 'pixel5',
+       'pixel6', 'pixel7', 'pixel8',
+       ...
+       'pixel774', 'pixel775', 'pixel776', 'pixel777', 'pixel778', 'pixel779',
+       'pixel780', 'pixel781', 'pixel782', 'pixel783'],
+      dtype='object', length=785)
+X = mnist.drop('label', axis=1)
+y = mnist[['label']]
+print(X.shape)
+print(y.shape)
+(42000, 784)
+(42000, 1)
+28 * 28
+784
+X.iloc[2200].shape
+(784,)
+some_digit = X.iloc[2200]
+
+some_digit_img = some_digit.values.reshape(28, 28)
+plt.imshow(some_digit_img, cmap = plt.cm.binary)
+plt.axis("off")
+plt.show()
+
+def plot_digit(data):
+    image = data.values.reshape(28, 28)
+    plt.imshow(image, cmap= plt.cm.binary)
+    plt.axis("off")
+plot_digit(X.iloc[2100])
+
+Training and Testing
+# write your own split logic
+def split_train_test(data, test_ratio):
+    np.random.seed(42)
+    shuffled_idx = np.random.permutation(len(data))
+    test_set_size = int(len(data) * test_ratio)
+    test_idx = shuffled_idx[:test_set_size]
+    train_idx = shuffled_idx[test_set_size:]
+    
+    return data.iloc[train_idx], data.iloc[test_idx]
+train_set, test_set = split_train_test(mnist, 0.2)
+
+print(len(train_set), "train + ", len(test_set), "test")
+33600 train +  8400 test
+len(mnist)
+42000
+(8400/42000)*100
+20.0
+other way using scikit-learn's built-in
+Random Sampling:
+
+from sklearn.model_selection import train_test_split
+train_set, test_set = train_test_split(mnist, test_size=0.2, random_state=29)
+
+Stratified Sampling:
+
+from sklearn.model_selection import StratifiedShuffleSplit
+for train_idx, test_idx in split.split(mnist, mnist['label']):
+    start_train_set = data.loc[train_idx]
+    start_test_set = data.loc[test_idx]
+
+dataset = pd.read_csv("digit-recognizer/train.csv")
+from sklearn.model_selection import train_test_split
+train_set, test_set = train_test_split(dataset, test_size=0.2, random_state=29)
+X_train, y_train = train_set.drop('label', axis=1), train_set[['label']]
+X_test, y_test = test_set.drop('label', axis=1), test_set[['label']]
+Binary Classifier
+# classified into whether its a digit 2 or a digit thats not a 2
+
+y_train_2 = (y_train == 2) # true for all 2s, false otherwise
+y_test_2 = (y_test == 2)
+y_train_2.head(2)
+label
+15126	False
+12188	False
+import warnings
+warnings.filterwarnings('ignore')
+from sklearn.linear_model import SGDClassifier
+
+sgd_clf = SGDClassifier(random_state=29)
+sgd_clf.fit(X_train, y_train_2)
+SGDClassifier(alpha=0.0001, average=False, class_weight=None,
+       early_stopping=False, epsilon=0.1, eta0=0.0, fit_intercept=True,
+       l1_ratio=0.15, learning_rate='optimal', loss='hinge', max_iter=None,
+       n_iter=None, n_iter_no_change=5, n_jobs=None, penalty='l2',
+       power_t=0.5, random_state=29, shuffle=True, tol=None,
+       validation_fraction=0.1, verbose=0, warm_start=False)
+plot_digit(some_digit)
+
+sgd_clf.predict([some_digit])
+array([False])
+from sklearn.model_selection import cross_val_score
+
+cross_val_score(sgd_clf, X_train, y_train_2, scoring="accuracy", cv=3)
+array([0.92973214, 0.91821429, 0.97321429])
+Accuracy is a dumb measure for any classifier
+
+# lets see how
+
+# Dumb Classifier
+
+from sklearn.base import BaseEstimator
+
+class Never2Classifier(BaseEstimator):
+    def fit(self, X, y=None):
+        pass # does nothing
+    
+    def predict(self, X):
+        return np.zeros((len(X), 1), dtype=bool) # dumb enought to call everything as "not 2"
+never_2_clf = Never2Classifier()
+cross_val_score(never_2_clf, X_train, y_train_2, cv=3, scoring="accuracy")
+array([0.90053571, 0.90142857, 0.89991071])
+# that's why accuracy can't be used as performance measure for any classifier
+Confusion Matrix
+# general idea is: count no. of times instances of class A are classified as CLass B.
+
+from sklearn.model_selection import cross_val_predict
+
+y_train_pred = cross_val_predict(sgd_clf, X_train, y_train_2, cv=3)
+from sklearn.metrics import confusion_matrix
+
+confusion_matrix(y_train_2, y_train_pred)
+array([[28630,  1631],
+       [  372,  2967]], dtype=int64)
+         | Predicted(F) | Predicted(T)
+|-----------------------|------------|
+Actual(F)| 28630 (TN)   |  1631 (FP) |
+Actual(T)|   372 (FN)   |  2967 (TP) |
+Precision
+precision ~= accuracy
+Precision=TPTP+FP
+ 
+Recall
+Recall=TPTP+FN
+ 
+your classifier shoudl have high precision and high recall
+
+F1 Scrore
+harmonic mean of precision and recall
+
+F1=2xprecisionxrecallprecision+recall
+ 
+F1=TPTP+FN+FP2
+ 
+from sklearn.metrics import precision_score, recall_score
+
+precision_score(y_train_2, y_train_pred)
+0.6452805567638104
+recall_score(y_train_2, y_train_pred)
+0.8885893980233602
+from sklearn.metrics import f1_score
+
+f1_score(y_train_2, y_train_pred)
+0.747637646465919
+# plotting P & R
+y_scores = sgd_clf.decision_function([some_digit])
+y_scores
+array([-474826.00105644])
+# threshold = 0
+
+# y_some_digit_pred = (y_scores > threshold)
+# print(y_some_digit_pred)
+[False]
+lets see the Precision Recall trade-off
+threshold = 20000
+
+y_scores = cross_val_predict(sgd_clf, X_train, y_train_2, cv=3, method="decision_function")
+from sklearn.metrics import precision_recall_curve
+
+precisions, recalls, thresholds = precision_recall_curve(y_train_2, y_scores)
+def plot_precision_recall_vs_threshold(precisions, recalls, thresholds):
+    plt.plot(thresholds, precisions[:-1], "b--", label="precision")
+    plt.plot(thresholds, recalls[:-1], "g--", label="recall")
+    plt.xlabel("threshold")
+    plt.legend(loc="upper left")
+    plt.ylim([0,1])
+    
+plt.figure(figsize=(8,4))   
+plot_precision_recall_vs_threshold(precisions, recalls, thresholds)
+plt.show()
